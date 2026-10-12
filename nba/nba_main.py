@@ -1,4 +1,3 @@
-import argparse
 import logging
 import os.path
 import time
@@ -6,32 +5,27 @@ import time
 import pandas as pd
 from atproto import Client
 
-from nba.nba_utils import NBAUtils
-from utils.calculate_ranking import PlayerRankings
-from utils.posts import PostComposition
+from nba.nba_utils import fetch_nba_data, load_table, update_table
+from utils.calculate_ranking import get_next_player, get_ordinal_suffix, get_passed_player
+from utils.posts import compose_post
 
 pd.set_option('display.max_columns', None)
 
 
 logger = logging.getLogger(__name__)
 
+NBA_FETCH_FAILURE_EXIT_CODE = 2
+
 
 class NBA:
 
-    def __init__(self, username, password):
+    def __init__(self, username, password, debug=False):
         self.username = username
         self.password = password
-
-        self.nba_utils = NBAUtils()
-        self.post_comp = PostComposition()
-        self.rankings = PlayerRankings()
-
-        parser = argparse.ArgumentParser(description="Running nba_main.py in Debug Mode")
-        parser.add_argument('--debug', action='store_true', help='Enable debugging mode')
-        self.args = parser.parse_args()
+        self.debug = debug
 
         self.posts = []
-        logger.info("NBA bot initialized (debug=%s)", self.args.debug)
+        logger.info("NBA bot initialized (debug=%s)", self.debug)
 
 
     def process_passed_players(self, player_info, passed_players):
@@ -41,14 +35,13 @@ class NBA:
         points = player_info['points']
         new_table = player_info['new_table']
 
-        ordinal_suffix = self.rankings.get_ordinal_suffix(player_info['current_rank'])
-        players_passed_info = self.rankings.get_passed_player(passed_players, points, new_table)
+        ordinal_suffix = get_ordinal_suffix(player_info['current_rank'])
+        players_passed_info = get_passed_player(passed_players, points, new_table)
 
-        next_name, next_player_rank, difference_to_next \
-            = self.rankings.get_next_player(current_rank,
-                                                        points,
-                                                        new_table)
-        next_ordinal_suffix = self.rankings.get_ordinal_suffix(next_player_rank)
+        next_name, next_player_rank, difference_to_next = get_next_player(
+            current_rank, points, new_table
+        )
+        next_ordinal_suffix = get_ordinal_suffix(next_player_rank)
 
         post_data = {
             'player_name': player_name,
@@ -62,14 +55,7 @@ class NBA:
             'players_passed_info': players_passed_info
         }
 
-        if len(players_passed_info) == 1:
-            post = self.post_comp.single_player_posts(post_data)
-        elif len(players_passed_info) == 2:
-            post = self.post_comp.two_player_posts(post_data)
-        else:
-            post = self.post_comp.multi_player_posts(post_data)
-
-        return post
+        return compose_post(post_data)
 
     def check_rank_changes(self, player_id, current_rank, old_table):
         previous_rank = old_table.loc[old_table['PLAYER_ID'] == player_id, 'PTS_RANK'].values
@@ -127,7 +113,7 @@ class NBA:
         # Reverse the order of posts before posting
         self.posts.reverse()
 
-        if self.args.debug:
+        if self.debug:
             logger.info("Debug mode is enabled. Skipping Bluesky post submission.")
             for idx, post in enumerate(self.posts, start=1):
                 logger.debug("Post %s preview: %s", idx, post)
@@ -162,7 +148,7 @@ class NBA:
         logger.info("All posts sent successfully.")
 
     def main(self):
-        if self.args.debug:
+        if self.debug:
             logger.info("Running with static debug data.")
             # Example of current week table
             new_data = {
@@ -186,15 +172,11 @@ class NBA:
             self.compose_post(new_table, old_table)
         else:
             logger.info("Fetching live NBA scoring data.")
-            info = {
-                'website': 'https://stats.nba.com',
-                'stats': 'PTS',
-                'season_type': 'Regular Season',
-                'season': 'All Time'
-            }
-
-            url = self.nba_utils.customize_nba_url(info)
-            logger.debug("Built NBA stats URL: %s", url)
+            url = (
+                "https://stats.nba.com/stats/leagueLeaders?"
+                "ActiveFlag=No&LeagueID=00&PerMode=Totals&Scope=S&"
+                "Season=All Time&SeasonType=Regular Season&StatCategory=PTS"
+            )
 
             # Get the file names
             directory_path = os.path.dirname(os.path.realpath(__file__))
@@ -202,15 +184,23 @@ class NBA:
             old_data = os.path.join(directory_path, 'old_nba_scoring_data.csv')
 
             # Create the new table and grab the previous week table
-            new_table = self.nba_utils.fetch_nba_data(url)
-            old_table = self.nba_utils.load_table(old_data)
+            try:
+                new_table = fetch_nba_data(url)
+            except RuntimeError as error:
+                logger.error(
+                    "Could not refresh NBA standings; skipping this run and "
+                    "preserving the cached CSV files: %s",
+                    error,
+                )
+                return NBA_FETCH_FAILURE_EXIT_CODE
+            old_table = load_table(old_data)
             logger.info("Fetched current table and loaded previous table.")
 
             # Update the current_week file with the new data
-            self.nba_utils.update_table(table=new_table, filename=updated_data)
+            update_table(table=new_table, filename=updated_data)
             logger.debug("Updated new data file: %s", updated_data)
             self.compose_post(new_table, old_table)
 
             # Update the previous file with this week's table, so we can compare next week
-            self.nba_utils.update_table(table=new_table, filename=old_data)
+            update_table(table=new_table, filename=old_data)
             logger.debug("Updated old data file: %s", old_data)
