@@ -29,8 +29,8 @@ class RankingTests(unittest.TestCase):
             [("Bravo", 2, 50)],
         )
         self.assertEqual(
-            calculate_ranking.get_next_player(3, 950, table),
-            ("Bravo, Charlie", 2, "-49"),
+            calculate_ranking.get_next_player(3, 850, table),
+            ("Bravo, Charlie", 2, "51"),
         )
 
 
