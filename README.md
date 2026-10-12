@@ -14,3 +14,6 @@ Control verbosity with `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
 
 Logging is configured centrally in `utils/settings.py` via `configure_logging()`.
 
+## Tests
+
+Run the unit tests with `python3 -m unittest`.

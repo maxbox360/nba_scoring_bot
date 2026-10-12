@@ -27,6 +27,28 @@ jobs:
           BLUESKY_USERNAME: ${{ secrets.BLUESKY_USERNAME }}
           BLUESKY_PASSWORD: ${{ secrets.BLUESKY_PASSWORD }}
 
+      - name: Diagnose NBA Stats response
+        if: failure()
+        run: |
+          url='https://stats.nba.com/stats/leagueLeaders?ActiveFlag=No&LeagueID=00&PerMode=Totals&Scope=S&Season=All%20Time&SeasonType=Regular%20Season&StatCategory=PTS'
+          headers_file=$(mktemp)
+          body_file=$(mktemp)
+          trap 'rm -f "$headers_file" "$body_file"' EXIT
+
+          status=$(curl --silent --show-error --location --max-time 30 \
+            --user-agent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.117 Safari/537.36' \
+            --header 'Referer: https://www.nba.com/' \
+            --header 'Origin: https://www.nba.com' \
+            --dump-header "$headers_file" --output "$body_file" \
+            --write-out '%{http_code}' "$url") || true
+
+          echo "NBA Stats diagnostic HTTP status: ${status:-unavailable}"
+          echo "NBA Stats diagnostic content type:"
+          grep -i '^content-type:' "$headers_file" | tail -n 1 || true
+          echo "NBA Stats diagnostic response excerpt (first 200 bytes):"
+          head -c 200 "$body_file" 2>/dev/null || true
+          echo
+
       - name: Debug - Check File Changes
         run: |
           echo "Checking if CSV files were modified..."
