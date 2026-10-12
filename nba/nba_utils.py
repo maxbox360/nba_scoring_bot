@@ -57,7 +57,7 @@ def fetch_nba_data(url):
             limited_table = table[:250]
             logger.info("Fetched %s NBA rows successfully.", len(limited_table))
             return limited_table
-        except (requests.RequestException, ValueError) as e:
+        except (requests.RequestException, ValueError, KeyError, TypeError) as e:
             last_error = e
             wait = backoff * (2 ** (attempt - 1))
             if attempt < retries:

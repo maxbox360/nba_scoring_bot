@@ -29,8 +29,8 @@ class RankingTests(unittest.TestCase):
             [("Bravo", 2, 50)],
         )
         self.assertEqual(
-            calculate_ranking.get_next_player(3, 950, table),
-            ("Bravo, Charlie", 2, "-49"),
+            calculate_ranking.get_next_player(3, 850, table),
+            ("Bravo, Charlie", 2, "51"),
         )
 
 
@@ -197,8 +197,9 @@ class BotTests(unittest.TestCase):
             with patch.object(nba_main, "load_table") as load:
                 with patch.object(nba_main, "update_table") as update:
                     with patch.object(self.bot, "compose_post") as compose:
-                        self.bot.main()
+                        status = self.bot.main()
 
+        self.assertEqual(status, nba_main.NBA_FETCH_FAILURE_EXIT_CODE)
         load.assert_not_called()
         update.assert_not_called()
         compose.assert_not_called()

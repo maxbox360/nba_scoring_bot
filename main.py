@@ -1,5 +1,6 @@
 import argparse
 import logging
+import sys
 
 from dotenv import load_dotenv
 
@@ -23,4 +24,4 @@ if __name__ == "__main__":
     password = get_env('BLUESKY_PASSWORD')
 
     nba = NBA(username=username, password=password, debug=args.debug)
-    nba.main()
+    sys.exit(nba.main() or 0)
