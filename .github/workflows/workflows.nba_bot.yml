@@ -21,14 +21,22 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Run NBA Scoring Bot
+        id: run_bot
         run: |
-          docker compose up --build --abort-on-container-exit
+          set +e
+          docker compose up --build --abort-on-container-exit --exit-code-from nba_scoring_bot
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo "nba_fetch_failed=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"
         env:
           BLUESKY_USERNAME: ${{ secrets.BLUESKY_USERNAME }}
           BLUESKY_PASSWORD: ${{ secrets.BLUESKY_PASSWORD }}
 
       - name: Diagnose NBA Stats response
-        if: failure()
+        if: always() && steps.run_bot.outputs.nba_fetch_failed == 'true'
         run: |
           url='https://stats.nba.com/stats/leagueLeaders?ActiveFlag=No&LeagueID=00&PerMode=Totals&Scope=S&Season=All%20Time&SeasonType=Regular%20Season&StatCategory=PTS'
           headers_file=$(mktemp)

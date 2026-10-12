@@ -14,6 +14,8 @@ pd.set_option('display.max_columns', None)
 
 logger = logging.getLogger(__name__)
 
+NBA_FETCH_FAILURE_EXIT_CODE = 2
+
 
 class NBA:
 
@@ -190,7 +192,7 @@ class NBA:
                     "preserving the cached CSV files: %s",
                     error,
                 )
-                return
+                return NBA_FETCH_FAILURE_EXIT_CODE
             old_table = load_table(old_data)
             logger.info("Fetched current table and loaded previous table.")
 
